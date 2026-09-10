@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Compiler</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-base:     #0d0d18;
+            --bg-elevated: #161626;
+            --bg-input:    #1a1a2e;
+            --border:      #2a2a44;
+            --border-focus:#4a4a6e;
+            --text-primary:#e0e0e8;
+            --text-muted:  #7c7c9a;
+            --text-dim:    #5a5a7a;
+            --accent-obj:  #ffb74d;
+            --accent-inv:  #ce93d8;
+            --accent-neg:  #ef5350;
+            --accent-inp:  #6ec6ff;
+            --accent-out:  #81c784;
+            --accent-fail: #ffd54f;
+            --accent-s2:   #4dd0e1;
+            --accent-s3:   #ab47bc;
+            --accent-risk: #ff5252;
+            --accent-patch:#66bb6a;
+            --accent-score:#ffca28;
+        }
+
+        body {
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-family: 'IBM Plex Sans', system-ui, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .shell {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 36px 24px 80px;
+        }
+
+        /* ── Header ─────────────────────────── */
+        .stage-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--text-dim);
+            letter-spacing: 0.06em;
+            margin-bottom: 2px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: #f0f0f8;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* ── Input Area ─────────────────────── */
+        .input-area { margin-top: 28px; }
+
+        textarea {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 14px 16px;
+            color: var(--text-primary);
+            font-family: 'IBM Plex Sans', sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        textarea:focus { border-color: var(--border-focus); }
+        textarea::placeholder { color: var(--text-dim); }
+
+        .input-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .meta-text {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* ── Buttons ────────────────────────── */
+        .btn {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 24px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-primary {
+            background: var(--text-primary);
+            color: var(--bg-base);
+        }
+        .btn-primary:disabled {
+            background: var(--border);
+            color: var(--text-dim);
+            cursor: wait;
+        }
+        .btn-stage {
+            background: transparent;
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+        }
+        .btn-stage:hover:not(:disabled) { filter: brightness(1.15); }
+        .btn-stage:disabled { opacity: 0.4; cursor: wait; }
+        .btn-s2 { border: 1px solid var(--accent-s2); color: var(--accent-s2); }
+        .btn-s2:hover:not(:disabled) { background: #4dd0e10d; }
+        .btn-s3 { border: 1px solid var(--accent-s3); color: var(--accent-s3); }
+        .btn-s3:hover:not(:disabled) { background: #ab47bc0d; }
+
+        /* ── Error ──────────────────────────── */
+        .error-box {
+            background: #2a1a1a;
+            border: 1px solid #ef535044;
+            border-radius: 6px;
+            padding: 14px 16px;
+            margin-top: 20px;
+            color: #ef9a9a;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+            word-break: break-word;
+        }
+        .error-box.quota-warning {
+            background: #2a2518;
+            border-color: #ffca2844;
+            color: #ffe082;
+        }
+
+        /* ── Sample Payload Collapsible ─────── */
+        .sample-payload-area {
+            margin-top: 14px;
+        }
+        .sample-toggle {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.15s;
+        }
+        .sample-toggle:hover { color: var(--text-muted); }
+        .sample-input {
+            width: 100%;
+            margin-top: 8px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+        }
+        .sample-input:focus { border-color: var(--border-focus); }
+        .sample-input::placeholder { color: var(--text-dim); }
+
+        /* ── Section Headers ────────────────── */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 32px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .section-header h2 {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        .section-badge {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+
+        /* ── JSON Blocks ────────────────────── */
+        .field-group { margin-bottom: 18px; }
+
+        .field-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .field-value {
+            background: var(--bg-elevated);
+            padding: 12px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .field-value-bordered {
+            background: var(--bg-elevated);
+            padding: 10px 16px;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        .item-index {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            margin-right: 10px;
+            opacity: 0.6;
+        }
+        .list-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .nested-container {
+            background: var(--bg-elevated);
+            border-radius: 6px;
+            padding: 16px;
+        }
+
+        /* ── Tabs ────────────────────────────── */
+        .tab-bar {
+            display: flex;
+            gap: 2px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-dim);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .tab-btn.active {
+            color: var(--text-primary);
+            border-bottom-color: var(--text-primary);
+        }
+
+        /* ── Prompt / code blocks ───────────── */
+        .prompt-block {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            line-height: 1.65;
+            color: #c8c8de;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .copy-btn {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            border-radius: 3px;
+            padding: 4px 10px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+        .copy-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+        /* ── Stage 3: Integrity Score ────────── */
+        .score-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding: 16px 20px;
+            background: var(--bg-elevated);
+            border-radius: 6px;
+        }
+        .score-value {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 36px;
+            font-weight: 600;
+            line-height: 1;
+        }
+        .score-bar-track {
+            flex: 1;
+            height: 6px;
+            background: #2a2a44;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .score-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .score-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* ── Patch Actions ───────────────────── */
+        .patch-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .btn-apply-patches {
+            background: transparent;
+            border: 1px solid var(--accent-patch);
+            color: var(--accent-patch);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-apply-patches:hover:not(:disabled) { background: #66bb6a0d; }
+        .btn-apply-patches:disabled { opacity: 0.4; cursor: default; }
+        .btn-reverify {
+            background: transparent;
+            border: 1px solid var(--accent-s3);
+            color: var(--accent-s3);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-reverify:hover:not(:disabled) { background: #ab47bc0d; }
+        .btn-reverify:disabled { opacity: 0.4; cursor: wait; }
+        .patch-status {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 3px;
+            transition: opacity 0.3s;
+        }
+        .patch-status-applied {
+            background: #66bb6a18;
+            color: var(--accent-patch);
+        }
+
+        /* ── Spinner ────────────────────────── */
+        .spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid var(--text-dim);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+<div class="shell">
+
+    <!-- Header -->
+    <div class="stage-label">pipeline</div>
+    <h1>Prompt Compiler</h1>
+    <p class="subtitle">Three-stage decomposition, compilation, and verification for production prompt specifications.</p>
+
+    <!-- Input -->
+    <div class="input-area">
+    <textarea id="rawInput" rows="7"
+              placeholder="Describe the task, system, or functionality you want to prompt a high-tier model for..."></textarea>
+        <div class="input-controls">
+            <span class="meta-text" id="wordCount"></span>
+            <button class="btn btn-primary" id="compileBtn" onclick="runStage1()">compile stage 1 →</button>
+        </div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box hidden" id="errorBox"></div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  STAGE 1 OUTPUT                    -->
+    <!-- ═══════════════════════════════════ -->
+    <div class="hidden" id="stage1Section">
+        <div class="section-header">
+            <h2 style="color:var(--text-primary)">Stage 1 — Intent Digest</h2>
+            <span class="section-badge" style="background:#ce93d818;color:var(--accent-inv)">extracted</span>
+        </div>
+
+        <div class="tab-bar" id="s1-tabs">
+            <button class="tab-btn active" onclick="switchTab('structured','s1')">structured</button>
+            <button class="tab-btn" onclick="switchTab('raw','s1')">raw json</button>
+        </div>
+
+        <div id="s1-structured"></div>
+        <div id="s1-raw" class="hidden">
+            <pre class="prompt-block" id="s1RawJson"></pre>
+        </div>
+
+        <button class="btn btn-stage btn-s2" id="stage2Btn" onclick="runStage2()">compile stage 2 — assemble production prompt →</button>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  STAGE 2 OUTPUT                    -->
+    <!-- ═══════════════════════════════════ -->
+    <div class="hidden" id="stage2Section">
+        <div class="section-header">
+            <h2 style="color:var(--accent-s2)">Stage 2 — Compiled Specification</h2>
+            <span class="section-badge" style="background:#4dd0e118;color:var(--accent-s2)">compiled</span>
+        </div>
+
+        <div class="tab-bar" id="s2-tabs">
+            <button class="tab-btn active" onclick="switchTab('structured','s2')">structured</button>
+            <button class="tab-btn" onclick="switchTab('prompt','s2')">assembled prompt</button>
+            <button class="tab-btn" onclick="switchTab('raw','s2')">raw json</button>
+        </div>
+
+        <div id="s2-structured"></div>
+        <div id="s2-prompt" class="hidden"></div>
+        <div id="s2-raw" class="hidden">
+            <pre class="prompt-block" id="s2RawJson"></pre>
+        </div>
+
+        <button class="btn btn-stage btn-s3" id="stage3Btn" onclick="runStage3()">run verification &amp; hardening →</button>
+
+        <!-- Optional sample payload -->
+        <div class="sample-payload-area">
+            <button class="sample-toggle" id="sampleToggle" onclick="toggleSamplePayload()">+ optional: provide custom test payload</button>
+            <textarea class="sample-input hidden" id="samplePayloadInput" rows="3"
+                      placeholder="Paste a sample input payload to test against (leave blank for auto-generated adversarial input)..."></textarea>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════ -->
+    <!--  STAGE 3 OUTPUT                    -->
+    <!-- ═══════════════════════════════════ -->
+    <div class="hidden" id="stage3Section">
+        <div class="section-header">
+            <h2 style="color:var(--accent-s3)">Stage 3 — Verification &amp; Deployment</h2>
+            <span class="section-badge" style="background:#ab47bc18;color:var(--accent-s3)">hardened</span>
+        </div>
+
+        <!-- Integrity Score -->
+        <div id="s3-score"></div>
+
+        <div class="tab-bar" id="s3-tabs">
+            <button class="tab-btn active" onclick="switchTab('analysis','s3')">analysis</button>
+            <button class="tab-btn" onclick="switchTab('manifest','s3')">deployment manifest</button>
+            <button class="tab-btn" onclick="switchTab('raw','s3')">raw json</button>
+        </div>
+
+        <div id="s3-analysis"></div>
+        <div id="s3-manifest" class="hidden"></div>
+        <div id="s3-raw" class="hidden">
+            <pre class="prompt-block" id="s3RawJson"></pre>
+        </div>
+
+        <!-- Patch actions -->
+        <div class="patch-actions" id="patchActions">
+            <button class="btn-apply-patches" id="applyPatchesBtn" onclick="applyPatches()">apply patches to assembled prompt</button>
+            <button class="btn-reverify hidden" id="reverifyBtn" onclick="reverify()">re-verify →</button>
+            <span class="patch-status hidden" id="patchStatus"></span>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let stage1Data = null;
+    let stage2Data = null;
+    let stage3Data = null;
+
+    const $ = id => document.getElementById(id);
+
+    // ── Word count ──────────────────────────
+    $('rawInput').addEventListener('input', () => {
+        const v = $('rawInput').value.trim();
+        $('wordCount').textContent = v ? `\u2248${v.split(/\s+/).length} words` : '';
+    });
+
+    // ── Keyboard shortcut ───────────────────
+    $('rawInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); runStage1(); }
+    });
+
+    // ── Tab Switching (generic) ─────────────
+    function switchTab(tab, prefix) {
+        const tabMaps = {
+            s1: ['structured', 'raw'],
+            s2: ['structured', 'prompt', 'raw'],
+            s3: ['analysis', 'manifest', 'raw']
+        };
+        const allTabs = tabMaps[prefix];
+        if (!allTabs) return;
+
+        // Toggle panes
+        allTabs.forEach(t => {
+            const el = $(`${prefix}-${t}`);
+            if (el) el.classList.toggle('hidden', t !== tab);
+        });
+
+        // Toggle tab buttons
+        const tabBar = $(`${prefix}-tabs`);
+        if (tabBar) {
+            const btns = tabBar.querySelectorAll('.tab-btn');
+            const idx = allTabs.indexOf(tab);
+            btns.forEach((b, i) => b.classList.toggle('active', i === idx));
+        }
+    }
+
+    // ══════════════════════════════════════════
+    //  STAGE 1
+    // ══════════════════════════════════════════
+    async function runStage1() {
+        const raw = $('rawInput').value.trim();
+        if (!raw) return;
+
+        setBtn('compileBtn', true, 'compiling\u2026');
+        hideError();
+        hideAll();
+        stage1Data = stage2Data = stage3Data = null;
+
+        try {
+            const data = await post('/api/compile/stage1', { rawConcept: raw });
+            stage1Data = data;
+            renderStage1(data);
+            $('stage1Section').classList.remove('hidden');
+        } catch (err) {
+            showError(err.message);
+        } finally {
+            setBtn('compileBtn', false, 'compile stage 1 \u2192');
+        }
+    }
+
+    // ══════════════════════════════════════════
+    //  STAGE 2
+    // ══════════════════════════════════════════
+    async function runStage2() {
+        if (!stage1Data) return;
+
+        setBtn('stage2Btn', true, 'compiling stage 2\u2026');
+        hideError();
+        $('stage2Section').classList.add('hidden');
+        $('stage3Section').classList.add('hidden');
+        stage2Data = stage3Data = null;
+
+        try {
+            const data = await post('/api/compile/stage2', stage1Data);
+            stage2Data = data;
+            renderStage2(data);
+            $('stage2Section').classList.remove('hidden');
+        } catch (err) {
+            showError(err.message);
+        } finally {
+            setBtn('stage2Btn', false, 'compile stage 2 \u2014 assemble production prompt \u2192');
+        }
+    }
+
+    // ══════════════════════════════════════════
+    //  STAGE 3
+    // ══════════════════════════════════════════
+    async function runStage3() {
+        if (!stage2Data) return;
+
+        setBtn('stage3Btn', true, 'verifying & hardening\u2026');
+        hideError();
+        $('stage3Section').classList.add('hidden');
+        stage3Data = null;
+
+        const payload = {
+            compiledPrompt: stage2Data.assembledPrompt || '',
+            inputSchema:    stage2Data.inputSchema || '',
+            samplePayload:  ($('samplePayloadInput')?.value || '').trim(),
+            requiredInputs: stage1Data?.structuralPayload?.requiredInputs || []
+        };
+
+        try {
+            const data = await post('/api/compile/stage3', payload);
+            stage3Data = data;
+            renderStage3(data);
+            $('stage3Section').classList.remove('hidden');
+        } catch (err) {
+            showError(err.message);
+        } finally {
+            setBtn('stage3Btn', false, 'run verification & hardening \u2192');
+        }
+    }
+
+    // ══════════════════════════════════════════
+    //  RENDERERS
+    // ══════════════════════════════════════════
+
+    function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function renderList(items, color) {
+        if (!items || !items.length) return '<div class="field-value-bordered" style="opacity:0.4">none</div>';
+        return items.map((item, i) =>
+            `<div class="field-value-bordered" style="border-left:2px solid ${color}">
+       <span class="item-index" style="color:${color}">${String(i).padStart(2,'0')}</span>${esc(item)}
+     </div>`
+        ).join('');
+    }
+
+    // ── Stage 1 ──────────────────────────────
+    function renderStage1(d) {
+        const c = { obj:'#ffb74d', inv:'#ce93d8', neg:'#ef5350', inp:'#6ec6ff', out:'#81c784', fail:'#ffd54f' };
+
+        $('s1-structured').innerHTML = `
+    <div class="field-group">
+      <div class="field-label" style="color:${c.obj}">targetObjective</div>
+      <div class="field-value" style="border-left:2px solid ${c.obj}">${esc(d.targetObjective)}</div>
+    </div>
+    <div class="field-group">
+      <div class="field-label" style="color:${c.inv}">functionalInvariants</div>
+      <div class="list-stack">${renderList(d.functionalInvariants, c.inv)}</div>
+    </div>
+    <div class="field-group">
+      <div class="field-label" style="color:${c.neg}">negativeConstraints</div>
+      <div class="list-stack">${renderList(d.negativeConstraints, c.neg)}</div>
+    </div>
+    <div class="field-group">
+      <div class="field-label" style="color:${c.inp}">structuralPayload</div>
+      <div class="nested-container" style="border:1px solid ${c.inp}22">
+        <div class="field-group">
+          <div class="field-label" style="color:${c.inp}">requiredInputs</div>
+          <div class="list-stack">${renderList(d.structuralPayload?.requiredInputs, c.inp)}</div>
+        </div>
+        <div class="field-group" style="margin-bottom:0">
+          <div class="field-label" style="color:${c.out}">outputContracts</div>
+          <div class="list-stack">${renderList(d.structuralPayload?.outputContracts, c.out)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label" style="color:${c.fail}">failureModes</div>
+      <div class="list-stack">${renderList(d.failureModes, c.fail)}</div>
+    </div>
+  `;
+        $('s1RawJson').textContent = JSON.stringify(d, null, 2);
+    }
+
+    // ── Stage 2 ──────────────────────────────
+    function renderStage2(d) {
+        const c = '#4dd0e1';
+        const fields = [
+            'systemDirective', 'behavioralConstraints', 'inputSchema', 'outputSchema', 'edgeCaseHandling'
+        ];
+
+        $('s2-structured').innerHTML = fields.map(key => `
+    <div class="field-group">
+      <div class="field-label" style="color:${c}">${esc(key)}</div>
+      <div class="prompt-block" style="max-height:280px">${esc(d[key] || '\u2014')}</div>
+    </div>
+  `).join('');
+
+        $('s2-prompt').innerHTML = `
+    <div style="display:flex;align-items:center;margin-bottom:10px">
+      <div class="field-label" style="color:${c};margin-bottom:0">assembledPrompt</div>
+      <button class="copy-btn" onclick="copyText(stage2Data?.assembledPrompt, this)">copy</button>
+    </div>
+    <div class="prompt-block" style="max-height:none">${esc(d.assembledPrompt || '\u2014')}</div>
+  `;
+
+        $('s2RawJson').textContent = JSON.stringify(d, null, 2);
+    }
+
+    // ── Stage 3 ──────────────────────────────
+    function renderStage3(d) {
+        // Reset patch-action controls
+        $('applyPatchesBtn').disabled = !d.hardeningPatches?.length;
+        $('applyPatchesBtn').textContent = 'apply patches to assembled prompt';
+        $('reverifyBtn').classList.add('hidden');
+        $('patchStatus').classList.add('hidden');
+        patchesApplied = false;
+
+        const score = d.structuralIntegrityScore ?? 0;
+        const pct   = Math.round(score * 100);
+        const scoreColor = score >= 0.8 ? '#66bb6a' : score >= 0.5 ? '#ffca28' : '#ff5252';
+
+        // Score badge
+        $('s3-score').innerHTML = `
+    <div class="score-container">
+      <div>
+        <div class="score-value" style="color:${scoreColor}">${score.toFixed(2)}</div>
+        <div class="score-label">integrity score</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+        <div class="score-bar-track">
+          <div class="score-bar-fill" style="width:${pct}%;background:${scoreColor}"></div>
+        </div>
+        <div class="score-label" style="text-align:right">${pct}% structural compliance</div>
+      </div>
+    </div>
+  `;
+
+        // Analysis tab
+        const riskColor  = '#ff5252';
+        const patchColor = '#66bb6a';
+        const simColor   = '#b39ddb';
+
+        $('s3-analysis').innerHTML = `
+    <div class="field-group">
+      <div class="field-label" style="color:${simColor}">syntheticTestInput</div>
+      <div class="prompt-block" style="max-height:200px">${esc(d.syntheticTestInput || '\u2014')}</div>
+    </div>
+    <div class="field-group">
+      <div class="field-label" style="color:${simColor}">simulatedOutputDigest</div>
+      <div class="prompt-block" style="max-height:200px">${esc(d.simulatedOutputDigest || '\u2014')}</div>
+    </div>
+    <div class="field-group">
+      <div class="field-label" style="color:${riskColor}">boundaryBreachRisks</div>
+      <div class="list-stack">${renderList(d.boundaryBreachRisks, riskColor)}</div>
+    </div>
+    <div class="field-group">
+      <div class="field-label" style="color:${patchColor}">hardeningPatches</div>
+      <div class="list-stack">${renderList(d.hardeningPatches, patchColor)}</div>
+    </div>
+  `;
+
+        // Deployment manifest tab
+        $('s3-manifest').innerHTML = `
+    <div style="display:flex;align-items:center;margin-bottom:10px">
+      <div class="field-label" style="color:var(--accent-s3);margin-bottom:0">deploymentManifest</div>
+      <button class="copy-btn" onclick="copyText(stage3Data?.deploymentManifest, this)">copy</button>
+    </div>
+    <div class="prompt-block" style="max-height:none">${esc(d.deploymentManifest || '\u2014')}</div>
+  `;
+
+        $('s3RawJson').textContent = JSON.stringify(d, null, 2);
+    }
+
+    // ══════════════════════════════════════════
+    //  SELF-HEALING: APPLY PATCHES & RE-VERIFY
+    // ══════════════════════════════════════════
+
+    let patchesApplied = false;
+
+    function applyPatches() {
+        if (!stage2Data || !stage3Data || !stage3Data.hardeningPatches?.length) return;
+
+        // Build the hardened directive block
+        const patchBlock = '\n\n## Hardened Operational Directives\n' +
+            stage3Data.hardeningPatches.map((p, i) => `${i + 1}. ${p}`).join('\n');
+
+        // Mutate stage2Data in place so re-verification uses the patched prompt
+        stage2Data = { ...stage2Data, assembledPrompt: stage2Data.assembledPrompt + patchBlock };
+
+        // Re-render Stage 2 assembled prompt view
+        renderStage2(stage2Data);
+
+        // Sync the deployment manifest: inject patch block before </system_instruction>
+        if (stage3Data.deploymentManifest) {
+            const closingTag = '</system_instruction>';
+            const manifest = stage3Data.deploymentManifest;
+            if (manifest.includes(closingTag)) {
+                stage3Data = {
+                    ...stage3Data,
+                    deploymentManifest: manifest.replace(closingTag, '\n' + patchBlock + '\n' + closingTag)
+                };
+            } else {
+                // Fallback: append patch block at end
+                stage3Data = {
+                    ...stage3Data,
+                    deploymentManifest: manifest + '\n' + patchBlock
+                };
+            }
+            // Re-render just the manifest tab and raw json
+            const s3c = 'var(--accent-s3)';
+            $('s3-manifest').innerHTML = `
+      <div style="display:flex;align-items:center;margin-bottom:10px">
+        <div class="field-label" style="color:${s3c};margin-bottom:0">deploymentManifest</div>
+        <span class="patch-status patch-status-applied" style="margin-left:10px;margin-right:auto">synced</span>
+        <button class="copy-btn" onclick="copyText(stage3Data?.deploymentManifest, this)">copy</button>
+      </div>
+      <div class="prompt-block" style="max-height:none">${esc(stage3Data.deploymentManifest)}</div>
+    `;
+            $('s3RawJson').textContent = JSON.stringify(stage3Data, null, 2);
+        }
+
+        // UI feedback
+        patchesApplied = true;
+        $('applyPatchesBtn').disabled = true;
+        $('applyPatchesBtn').textContent = 'patches applied';
+
+        const status = $('patchStatus');
+        status.textContent = `${stage3Data.hardeningPatches.length} patches merged + manifest synced`;
+        status.className = 'patch-status patch-status-applied';
+        status.classList.remove('hidden');
+
+        $('reverifyBtn').classList.remove('hidden');
+    }
+
+    async function reverify() {
+        if (!stage2Data) return;
+
+        const btn = $('reverifyBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span>re-verifying\u2026';
+        hideError();
+
+        const payload = {
+            compiledPrompt: stage2Data.assembledPrompt || '',
+            inputSchema:    stage2Data.inputSchema || '',
+            samplePayload:  ($('samplePayloadInput')?.value || '').trim(),
+            requiredInputs: stage1Data?.structuralPayload?.requiredInputs || []
+        };
+
+        try {
+            const data = await post('/api/compile/stage3', payload);
+            stage3Data = data;
+            patchesApplied = false;
+            renderStage3(data);
+
+            // Flash the score to draw attention to the change
+            const scoreEl = $('s3-score');
+            scoreEl.style.transition = 'opacity 0.15s';
+            scoreEl.style.opacity = '0.3';
+            setTimeout(() => { scoreEl.style.opacity = '1'; }, 150);
+        } catch (err) {
+            showError(err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 're-verify \u2192';
+        }
+    }
+
+    // ══════════════════════════════════════════
+    //  HELPERS
+    // ══════════════════════════════════════════
+
+    async function post(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        return data;
+    }
+
+    function setBtn(id, disabled, label) {
+        const btn = $(id);
+        btn.disabled = disabled;
+        btn.innerHTML = disabled ? `<span class="spinner"></span>${label}` : label;
+    }
+
+    function showError(msg) {
+        const box = $('errorBox');
+        const isQuota = /429|quota|rate.?limit/i.test(msg);
+        box.className = isQuota ? 'error-box quota-warning' : 'error-box';
+        box.textContent = isQuota
+            ? `\u23f3 ${msg} — wait 15\u201330 seconds then retry.`
+            : `error: ${msg}`;
+        box.classList.remove('hidden');
+    }
+    function hideError() {
+        const box = $('errorBox');
+        box.classList.add('hidden');
+        box.className = 'error-box hidden';
+    }
+
+    function toggleSamplePayload() {
+        const input = $('samplePayloadInput');
+        const btn   = $('sampleToggle');
+        const show  = input.classList.toggle('hidden');
+        // classList.toggle returns true if the class was added (i.e., now hidden)
+        btn.textContent = show
+            ? '+ optional: provide custom test payload'
+            : '\u2212 hide custom test payload';
+    }
+
+    function hideAll() {
+        $('stage1Section').classList.add('hidden');
+        $('stage2Section').classList.add('hidden');
+        $('stage3Section').classList.add('hidden');
+    }
+
+    function copyText(text, btn) {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            const orig = btn.textContent;
+            btn.textContent = 'copied';
+            setTimeout(() => btn.textContent = orig, 1500);
+        });
+    }
+</script>
+</body>
+</html>
